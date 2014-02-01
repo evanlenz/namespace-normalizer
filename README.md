@@ -11,27 +11,31 @@ For example:
 
 BEFORE:
 
-    <foo xmlns="default1">
-      <abc:bar xmlns="default2andfoo" xmlns:abc="default1">
-        <bat xmlns:foo="default2andfoo" foo:bar="value">
-          <bang xmlns="default3">
-            <abc:hi xmlns:xyz="unused-uri"/>
-          </bang>
-        </bat>
-      </abc:bar>
-    </foo>
+```xml
+<foo xmlns="default1">
+  <abc:bar xmlns="default2andfoo" xmlns:abc="default1">
+    <bat xmlns:foo="default2andfoo" foo:bar="value">
+      <bang xmlns="default3">
+        <abc:hi xmlns:xyz="unused-uri"/>
+      </bang>
+    </bat>
+  </abc:bar>
+</foo>
+```
 
 AFTER:
 
-    <foo xmlns="default1" xmlns:foo="default2andfoo" xmlns:ns1="default3" xmlns:xyz="unused-uri">
-      <bar>
-        <foo:bat foo:bar="value">
-          <ns1:bang>
-            <hi/>
-          </ns1:bang>
-        </foo:bat>
-      </bar>
-    </foo>
+```xml
+<foo xmlns="default1" xmlns:foo="default2andfoo" xmlns:ns1="default3" xmlns:xyz="unused-uri">
+  <bar>
+    <foo:bat foo:bar="value">
+      <ns1:bang>
+        <hi/>
+      </ns1:bang>
+    </foo:bat>
+  </bar>
+</foo>
+```
 
 For more background and detailed considerations on this, as well as
 an XSLT 1.0 version of this script, see
