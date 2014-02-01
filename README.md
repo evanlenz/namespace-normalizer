@@ -23,13 +23,13 @@ BEFORE:
 
 AFTER:
 
-    <foo xmlns="default1" xmlns:bar="default2andfoo" xmlns:ns1="default3" xmlns:xyz="unused-uri">
+    <foo xmlns="default1" xmlns:foo="default2andfoo" xmlns:ns1="default3" xmlns:xyz="unused-uri">
       <bar>
-        <bat bar:bar="value">
+        <foo:bat foo:bar="value">
           <ns1:bang>
-            <hi />
+            <hi/>
           </ns1:bang>
-        </bat>
+        </foo:bat>
       </bar>
     </foo>
 
