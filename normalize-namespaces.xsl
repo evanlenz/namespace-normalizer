@@ -13,10 +13,18 @@
   <!-- Set to true to print debugging info -->
   <xsl:param name="DEBUG" select="false()"/>
 
+  <!-- These can be overridden to process a different document -->
+  <xsl:variable name="input-document" select="/"/>
+  <xsl:template match="/">
+    <xsl:apply-templates mode="normalize-namespaces" select="."/>
+  </xsl:template>
+
+
   <!-- The first namespace node for each unique namespace URI -->
   <xsl:variable name="unique-uri-namespace-nodes"
-                select="for $uri in distinct-values(//namespace::*[not(name() eq 'xml')])
-                        return (//namespace::*[. eq $uri])[1]"/>
+                select="for $uri in distinct-values($input-document//namespace::*[not(name() eq 'xml')])
+                        return ($input-document//namespace::*[. eq $uri])[1]"/>
+
 
 
   <!-- These candidate bindings disallow default declarations
@@ -112,28 +120,28 @@
   </xsl:variable>
 
   <!-- Optionally output a DEBUG message -->
-  <xsl:template match="/">
+  <xsl:template match="/" mode="normalize-namespaces">
     <xsl:if test="$DEBUG">
       <xsl:call-template name="do-xsl-message-diagnostics"/>
     </xsl:if>
-    <xsl:apply-templates/>
+    <xsl:apply-templates mode="#current"/>
   </xsl:template>
 
   <!-- Give every element the same namespace nodes (the ones we've decided on above) -->
-  <xsl:template match="*">
+  <xsl:template match="*" mode="normalize-namespaces">
     <xsl:element name="{my:new-qname(.)}" namespace="{namespace-uri()}">
       <xsl:copy-of select="$new-namespace-nodes"/>
-      <xsl:apply-templates select="@* | node()"/>
+      <xsl:apply-templates mode="#current" select="@* | node()"/>
     </xsl:element>
   </xsl:template>
 
   <!-- Replicate attributes -->
-  <xsl:template match="@*">
+  <xsl:template match="@*" mode="normalize-namespaces">
     <xsl:attribute name="{my:new-qname(.)}" namespace="{namespace-uri()}" select="."/>
   </xsl:template>
 
   <!-- Do a simple copy of the other nodes -->
-  <xsl:template match="text() | comment() | processing-instruction()">
+  <xsl:template match="text() | comment() | processing-instruction()" mode="normalize-namespaces">
     <xsl:copy/>
   </xsl:template>
 
