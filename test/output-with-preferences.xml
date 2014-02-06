@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?><foo xmlns="default1" xmlns:x="default2andfoo" xmlns:y="default3" xmlns:xyz="unused-uri">
+  <bar>
+    <x:bat x:bar="value">
+      <y:bang>
+        <hi/>
+      </y:bang>
+    </x:bat>
+  </bar>
+</foo>

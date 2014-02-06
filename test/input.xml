@@ -1,0 +1,9 @@
+<foo xmlns="default1">
+  <abc:bar xmlns="default2andfoo" xmlns:abc="default1">
+    <bat xmlns:foo="default2andfoo" foo:bar="value">
+      <bang xmlns="default3">
+        <abc:hi xmlns:xyz="unused-uri"/>
+      </bang>
+    </bat>
+  </abc:bar>
+</foo>
