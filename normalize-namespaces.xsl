@@ -43,7 +43,7 @@
     <!-- print a DEBUG message, if applicable -->
     <xsl:if test="$DEBUG">
       <xsl:message>
-        <xsl:copy-of select="nn:diagnostics($doc,$ns-prefs)"/>
+        <xsl:copy-of select="nn:diagnostics($doc,$ns-prefs,$disallow-other-uses-of-preferred-prefixes)"/>
       </xsl:message>
     </xsl:if>
     <!-- Apply the new namespace nodes -->
@@ -199,9 +199,24 @@
   <xsl:function name="nn:final-bindings-doc" as="document-node()">
     <xsl:param name="doc"      as="document-node()"/>
     <xsl:param name="ns-prefs" as="element(ns)*"/>
+    <xsl:param name="disallow-other-uses" as="xs:boolean"/>
     <xsl:document>
-      <xsl:apply-templates mode="remove-redundancies"
-                           select="nn:unconflicted-bindings-doc($doc,$ns-prefs)/binding"/>
+      <xsl:variable name="redundancies-removed">
+        <xsl:apply-templates mode="remove-redundancies"
+                             select="nn:unconflicted-bindings-doc($doc,$ns-prefs)/binding"/>
+      </xsl:variable>
+      <xsl:choose>
+        <!-- When the user demands that their preferred prefixes not be used
+             for anything but the specified URIs, we make one additional pass. -->
+        <xsl:when test="$disallow-other-uses">
+          <xsl:apply-templates mode="remove-disallowed" select="$redundancies-removed">
+            <xsl:with-param name="ns-prefs" select="$ns-prefs" tunnel="yes"/>
+          </xsl:apply-templates>
+        </xsl:when>
+        <xsl:otherwise>
+          <xsl:copy-of select="$redundancies-removed"/>
+        </xsl:otherwise>
+      </xsl:choose>
     </xsl:document>
   </xsl:function>
 
@@ -215,10 +230,26 @@
                         match="binding[generate-prefix][uri = preceding::uri[../generate-prefix]]"/>
 
           <!-- By default, copy the bindings as is -->
-          <xsl:template mode="remove-redundancies" match="@* | node()">
+          <xsl:template mode="remove-redundancies
+                              remove-disallowed" match="@* | node()">
             <xsl:copy>
               <xsl:apply-templates mode="#current" select="@* | node()"/>
             </xsl:copy>
+          </xsl:template>
+
+
+          <!-- Change to <generate-prefix/> if the prefix is reserved for a different URI -->
+          <xsl:template mode="remove-disallowed" match="prefix">
+            <xsl:param name="ns-prefs" tunnel="yes"/>
+            <xsl:choose>
+              <xsl:when test="some $pref in $ns-prefs satisfies (.      eq $pref/@prefix
+                                                             and ../uri ne $pref/@uri)">
+                <generate-prefix/>
+              </xsl:when>
+              <xsl:otherwise>
+                <xsl:copy-of select="."/>
+              </xsl:otherwise>
+            </xsl:choose>
           </xsl:template>
 
 
@@ -227,14 +258,10 @@
     <xsl:param name="doc"      as="document-node()"/>
     <xsl:param name="ns-prefs" as="element(ns)*"/>
     <xsl:param name="disallow-other-uses" as="xs:boolean"/>
-    <xsl:for-each select="nn:final-bindings-doc($doc,$ns-prefs)/binding">
+    <xsl:for-each select="nn:final-bindings-doc($doc,$ns-prefs,$disallow-other-uses)/binding">
       <xsl:variable name="prefix">
-        <xsl:variable name="use-different-prefix"
-                      select="$disallow-other-uses and
-                              (some $pref in $ns-prefs satisfies (prefix eq $pref/@prefix
-                                                              and uri    ne $pref/@uri))"/>
         <xsl:choose>
-          <xsl:when test="generate-prefix or $use-different-prefix">
+          <xsl:when test="generate-prefix">
             <!-- Generate in the form "ns1", "ns2", etc. -->
             <xsl:variable name="auto-prefix"
                           select="concat('ns',1+count(preceding::generate-prefix))"/>
@@ -294,6 +321,7 @@
   <xsl:function name="nn:diagnostics">
     <xsl:param name="doc"      as="document-node()"/>
     <xsl:param name="ns-prefs" as="element(ns)*"/>
+    <xsl:param name="disallow-other-uses" as="xs:boolean"/>
     <diagnostics>
       <diagnostic name="candidate-bindings-doc">
         <xsl:copy-of select="nn:candidate-bindings-doc($doc,$ns-prefs)"/>
@@ -302,7 +330,7 @@
         <xsl:copy-of select="nn:unconflicted-bindings-doc($doc,$ns-prefs)"/>
       </diagnostic>
       <diagnostic name="final-bindings-doc">
-        <xsl:copy-of select="nn:final-bindings-doc($doc,$ns-prefs)"/>
+        <xsl:copy-of select="nn:final-bindings-doc($doc,$ns-prefs,$disallow-other-uses)"/>
       </diagnostic>
     </diagnostics>
   </xsl:function>
