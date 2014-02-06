@@ -67,7 +67,7 @@
     <xsl:document>
       <xsl:for-each select="nn:unique-uri-namespace-nodes($doc)">
         <!-- Process the pre-existing URIs (from the user-supplied list) first;
-             that way, their prefixes will have precedence when removing duplicates. -->
+             that way, their prefixes will have precedence when removing conflicts. -->
         <xsl:sort select="if (. = $ns-prefs/@uri) then 'first' else 'last'"/>
 
         <!-- is this a default namespace? -->
@@ -86,11 +86,7 @@
         <xsl:choose>
           <!-- do we need to force a non-empty prefix? -->
           <xsl:when test="$is-default and $cannot-be-default">
-            <!-- is there an existing prefix from the document we can use? -->
-            <xsl:variable name="prefix-from-document"
-                          select="name((//namespace::*[. eq current()][name()])[1])"/>
-
-            <xsl:copy-of select="nn:binding-with-nonempty-prefix(., $ns-prefs, $prefix-from-document)"/>
+            <xsl:copy-of select="nn:binding-with-nonempty-prefix(., $ns-prefs)"/>
           </xsl:when>
 
           <!-- otherwise, we can use the existing (possibly empty) prefix -->
@@ -108,7 +104,7 @@
 
             <!-- Create an additional namespace node if needed specifically for qualified attributes -->
             <xsl:if test="not($preferred-prefix) and //@*[namespace-uri() eq current()]">
-              <xsl:copy-of select="nn:binding-with-nonempty-prefix(., $ns-prefs, '')"/>
+              <xsl:copy-of select="nn:binding-with-nonempty-prefix(., $ns-prefs)"/>
             </xsl:if>
 
           </xsl:otherwise>
@@ -120,7 +116,9 @@
           <xsl:function name="nn:binding-with-nonempty-prefix" as="element(binding)">
             <xsl:param name="ns-node"/>
             <xsl:param name="ns-prefs"/>
-            <xsl:param name="prefix-from-document"/>
+            <!-- is there an existing prefix from the document we can use? -->
+            <xsl:variable name="prefix-from-document"
+                          select="name((root($ns-node)//namespace::*[. eq $ns-node][name()])[1])"/>
             <binding>
               <uri>
                 <xsl:value-of select="$ns-node"/>
@@ -163,22 +161,52 @@
           </xsl:function>
 
 
-  <!-- Create the final list of bindings, preventing the duplication of prefixes. -->
-  <xsl:function name="nn:final-bindings-doc" as="document-node()">
+  <!-- Remove conflicts (same prefix occurring more than once) -->
+  <xsl:function name="nn:unconflicted-bindings-doc" as="document-node()">
     <xsl:param name="doc"      as="document-node()"/>
     <xsl:param name="ns-prefs" as="element(ns)*"/>
     <xsl:document>
-      <xsl:apply-templates mode="remove-duplicates" select="nn:candidate-bindings-doc($doc,$ns-prefs)/binding"/>
+      <xsl:apply-templates mode="remove-conflicts" select="nn:candidate-bindings-doc($doc,$ns-prefs)/binding"/>
     </xsl:document>
   </xsl:function>
 
           <!-- Generate a prefix if it's already being used -->
-          <xsl:template mode="remove-duplicates" match="prefix[. = preceding::prefix]">
+          <xsl:template mode="remove-conflicts" match="prefix[. = preceding::prefix]">
             <generate-prefix/>
           </xsl:template>
 
           <!-- By default, copy the bindings as is -->
-          <xsl:template mode="remove-duplicates" match="@* | node()">
+          <xsl:template mode="remove-conflicts" match="@* | node()">
+            <xsl:copy>
+              <xsl:apply-templates mode="#current" select="@* | node()"/>
+            </xsl:copy>
+          </xsl:template>
+
+
+  <!-- Create the final list of bindings, removing any remaining redundant
+       declarations (those which could only come about because an extra declaration
+       was added to handle qualified attributes but has since become unnecessary).
+  -->
+  <xsl:function name="nn:final-bindings-doc" as="document-node()">
+    <xsl:param name="doc"      as="document-node()"/>
+    <xsl:param name="ns-prefs" as="element(ns)*"/>
+    <xsl:document>
+      <xsl:apply-templates mode="remove-redundancies"
+                           select="nn:unconflicted-bindings-doc($doc,$ns-prefs)/binding"/>
+    </xsl:document>
+  </xsl:function>
+
+          <!-- Remove a generated-prefix in favor of an already-present, non-empty prefix -->
+          <xsl:template mode="remove-redundancies"
+                        match="binding[generate-prefix][../binding[uri eq current()/uri][string(prefix)]]"
+                        priority="1"/>
+
+          <!-- Or, if there's more than one generated-prefix for the same URI, we only need one of them -->
+          <xsl:template mode="remove-redundancies"
+                        match="binding[generate-prefix][uri = preceding::uri[../generate-prefix]]"/>
+
+          <!-- By default, copy the bindings as is -->
+          <xsl:template mode="remove-redundancies" match="@* | node()">
             <xsl:copy>
               <xsl:apply-templates mode="#current" select="@* | node()"/>
             </xsl:copy>
@@ -189,9 +217,7 @@
   <xsl:function name="nn:new-namespace-nodes">
     <xsl:param name="doc"      as="document-node()"/>
     <xsl:param name="ns-prefs" as="element(ns)*"/>
-    <xsl:for-each select="nn:final-bindings-doc($doc,$ns-prefs)/binding
-                          [not(generate-prefix and uri = preceding-sibling::binding[generate-prefix]/uri)]">
-                          <!-- If we end up with more than one <generate-prefix/> for the same URI, only process the first -->
+    <xsl:for-each select="nn:final-bindings-doc($doc,$ns-prefs)/binding">
       <xsl:variable name="prefix">
         <xsl:choose>
           <xsl:when test="generate-prefix">
@@ -257,6 +283,9 @@
     <diagnostics>
       <diagnostic name="candidate-bindings-doc">
         <xsl:copy-of select="nn:candidate-bindings-doc($doc,$ns-prefs)"/>
+      </diagnostic>
+      <diagnostic name="unconflicted-bindings-doc">
+        <xsl:copy-of select="nn:unconflicted-bindings-doc($doc,$ns-prefs)"/>
       </diagnostic>
       <diagnostic name="final-bindings-doc">
         <xsl:copy-of select="nn:final-bindings-doc($doc,$ns-prefs)"/>
