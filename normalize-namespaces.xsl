@@ -21,7 +21,7 @@
   <!-- This is the main function of interest -->
   <xsl:function name="nn:normalize" as="document-node()">
     <xsl:param name="doc" as="document-node()"/>
-    <xsl:sequence select="nn:normalize($doc,())"/>
+    <xsl:sequence select="nn:normalize($doc,(),false())"/>
   </xsl:function>
 
   <!-- You can optionally supply a set of preferred prefix/URI mappings;
@@ -35,6 +35,11 @@
   <xsl:function name="nn:normalize" as="document-node()">
     <xsl:param name="doc"      as="document-node()"/>
     <xsl:param name="ns-prefs" as="element(ns)*"/>
+    <xsl:param name="disallow-other-uses-of-preferred-prefixes" as="xs:boolean"/>
+    <!-- Set to true if you want to disallow the use of preferred prefixes
+         except as specifically allowed, e.g. if "foo" appears in the
+         document bound to a different namespace than the one you specified. -->
+
     <!-- print a DEBUG message, if applicable -->
     <xsl:if test="$DEBUG">
       <xsl:message>
@@ -44,7 +49,11 @@
     <!-- Apply the new namespace nodes -->
     <xsl:document>
       <xsl:apply-templates mode="normalize-namespaces" select="$doc">
-        <xsl:with-param name="ns-nodes" select="nn:new-namespace-nodes($doc,$ns-prefs)" tunnel="yes"/>
+        <xsl:with-param name="ns-nodes"
+                        select="nn:new-namespace-nodes($doc,
+                                                       $ns-prefs,
+                                                       $disallow-other-uses-of-preferred-prefixes)"
+                        tunnel="yes"/>
       </xsl:apply-templates>
     </xsl:document>
   </xsl:function>
@@ -217,10 +226,15 @@
   <xsl:function name="nn:new-namespace-nodes">
     <xsl:param name="doc"      as="document-node()"/>
     <xsl:param name="ns-prefs" as="element(ns)*"/>
+    <xsl:param name="disallow-other-uses" as="xs:boolean"/>
     <xsl:for-each select="nn:final-bindings-doc($doc,$ns-prefs)/binding">
       <xsl:variable name="prefix">
+        <xsl:variable name="use-different-prefix"
+                      select="$disallow-other-uses and
+                              (some $pref in $ns-prefs satisfies (prefix eq $pref/@prefix
+                                                              and uri    ne $pref/@uri))"/>
         <xsl:choose>
-          <xsl:when test="generate-prefix">
+          <xsl:when test="generate-prefix or $use-different-prefix">
             <!-- Generate in the form "ns1", "ns2", etc. -->
             <xsl:variable name="auto-prefix"
                           select="concat('ns',1+count(preceding::generate-prefix))"/>
