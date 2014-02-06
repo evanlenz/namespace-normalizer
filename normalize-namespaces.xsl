@@ -18,19 +18,35 @@
     <xsl:copy-of select="nn:normalize(.)"/>
   </xsl:template>
 
-  <!-- This function can be called from importing code -->
-  <xsl:function name="nn:normalize">
+  <!-- This is the main function of interest -->
+  <xsl:function name="nn:normalize" as="document-node()">
     <xsl:param name="doc" as="document-node()"/>
+    <xsl:sequence select="nn:normalize($doc,())"/>
+  </xsl:function>
+
+  <!-- You can optionally supply a set of preferred prefix/URI mappings;
+       the expected format of $ns-prefs is as follows:
+       
+       <ns prefix=""    uri="http://example.com"/>
+       <ns prefix="foo" uri="http://example.com/ns"/>
+       ...
+       
+  -->
+  <xsl:function name="nn:normalize" as="document-node()">
+    <xsl:param name="doc"      as="document-node()"/>
+    <xsl:param name="ns-prefs" as="element(ns)*"/>
     <!-- print a DEBUG message, if applicable -->
     <xsl:if test="$DEBUG">
       <xsl:message>
-        <xsl:copy-of select="nn:diagnostics($doc)"/>
+        <xsl:copy-of select="nn:diagnostics($doc,$ns-prefs)"/>
       </xsl:message>
     </xsl:if>
     <!-- Apply the new namespace nodes -->
-    <xsl:apply-templates mode="normalize-namespaces" select="$doc">
-      <xsl:with-param name="ns-nodes" select="nn:new-namespace-nodes($doc)" tunnel="yes"/>
-    </xsl:apply-templates>
+    <xsl:document>
+      <xsl:apply-templates mode="normalize-namespaces" select="$doc">
+        <xsl:with-param name="ns-nodes" select="nn:new-namespace-nodes($doc,$ns-prefs)" tunnel="yes"/>
+      </xsl:apply-templates>
+    </xsl:document>
   </xsl:function>
 
 
@@ -46,58 +62,114 @@
        for namespaces that need a prefix, but they don't yet
        prevent duplicate prefixes; that comes later. -->
   <xsl:function name="nn:candidate-bindings-doc" as="document-node()">
-    <xsl:param name="doc" as="document-node()"/>
+    <xsl:param name="doc"      as="document-node()"/>
+    <xsl:param name="ns-prefs" as="element(ns)*"/>
     <xsl:document>
       <xsl:for-each select="nn:unique-uri-namespace-nodes($doc)">
-        <binding>
-          <uri>
-            <xsl:value-of select="."/>
-          </uri>
+        <!-- Process the pre-existing URIs (from the user-supplied list) first;
+             that way, their prefixes will have precedence when removing duplicates. -->
+        <xsl:sort select="if (. = $ns-prefs/@uri) then 'first' else 'last'"/>
 
-          <!-- is this a default namespace? -->
-          <xsl:variable name="is-default" select="not(name(.))"/>
+        <!-- is this a default namespace? -->
+        <xsl:variable name="is-default" select="not(name(.))"/>
 
-          <!-- must the URI have a prefix? -->
-          <xsl:variable name="needs-prefix"
-                        select="//*[not(namespace-uri())] or //@*[namespace-uri() eq current()]"/>
-          <xsl:choose>
+        <!-- must the URI have a prefix? -->
+        <!--
+         If there are any unqualified element names
+         then force default namespaces to use a prefix,
+         because we want to guarantee that the only
+         namespace declarations in our result will be
+         attached to the root element.
+        -->
+        <xsl:variable name="cannot-be-default" select="//*[not(namespace-uri())]"/>
 
-            <!-- do we need to add a prefix? -->
-            <xsl:when test="$is-default and $needs-prefix">
+        <xsl:choose>
+          <!-- do we need to force a non-empty prefix? -->
+          <xsl:when test="$is-default and $cannot-be-default">
+            <!-- is there an existing prefix from the document we can use? -->
+            <xsl:variable name="prefix-from-document"
+                          select="name((//namespace::*[. eq current()][name()])[1])"/>
 
-              <!-- is there an existing prefix we can use? -->
-              <xsl:variable name="alternate-prefix-candidate" select="(//namespace::*[. eq current()][name()])[1]"/>
-              <xsl:choose>
-                <xsl:when test="$alternate-prefix-candidate">
-                  <!-- Then use it! -->
-                  <prefix>
-                    <xsl:value-of select="name($alternate-prefix-candidate)"/>
-                  </prefix>
-                </xsl:when>
-                <xsl:otherwise>
-                  <!-- Leave a note to ourselves that we need to generate a new prefix -->
-                  <generate-prefix/>
-                </xsl:otherwise>
-              </xsl:choose>
-            </xsl:when>
+            <xsl:copy-of select="nn:binding-with-nonempty-prefix(., $ns-prefs, $prefix-from-document)"/>
+          </xsl:when>
 
-            <!-- otherwise, we can use the existing (possibly empty) prefix as is -->
-            <xsl:otherwise>
+          <!-- otherwise, we can use the existing (possibly empty) prefix -->
+          <xsl:otherwise>
+            <xsl:variable name="preferred-prefix"
+                          select="nn:choose-prefix(., $ns-prefs, name(.), false())"/>
+            <binding>
+              <uri>
+                <xsl:value-of select="."/>
+              </uri>
               <prefix>
-                <xsl:value-of select="name()"/>
+                <xsl:value-of select="$preferred-prefix"/>
               </prefix>
-            </xsl:otherwise>
-          </xsl:choose>
-        </binding>
+            </binding>
+
+            <!-- Create an additional namespace node if needed specifically for qualified attributes -->
+            <xsl:if test="not($preferred-prefix) and //@*[namespace-uri() eq current()]">
+              <xsl:copy-of select="nn:binding-with-nonempty-prefix(., $ns-prefs, '')"/>
+            </xsl:if>
+
+          </xsl:otherwise>
+        </xsl:choose>
       </xsl:for-each>
     </xsl:document>
   </xsl:function>
 
+          <xsl:function name="nn:binding-with-nonempty-prefix" as="element(binding)">
+            <xsl:param name="ns-node"/>
+            <xsl:param name="ns-prefs"/>
+            <xsl:param name="prefix-from-document"/>
+            <binding>
+              <uri>
+                <xsl:value-of select="$ns-node"/>
+              </uri>
+              <xsl:variable name="preferred-prefix" select="nn:choose-prefix($ns-node, $ns-prefs, $prefix-from-document, true())"/>
+              <xsl:choose>
+                <xsl:when test="$preferred-prefix">
+                  <!-- If a suitable prefix is found, use it! -->
+                  <prefix>
+                    <xsl:value-of select="$preferred-prefix"/>
+                  </prefix>
+                </xsl:when>
+                <xsl:otherwise>
+                  <!-- Otherwise, leave a note to ourselves that we need to generate a new prefix -->
+                  <generate-prefix/>
+                </xsl:otherwise>
+              </xsl:choose>
+            </binding>
+          </xsl:function>
+
+          <!-- Use the user-supplied preferred prefixes whenever possible -->
+          <xsl:function name="nn:choose-prefix" as="xs:string">
+            <xsl:param name="ns-node"/>
+            <xsl:param name="ns-prefs"          as="element(ns)*"/>
+            <xsl:param name="given-prefix"      as="xs:string"/>
+            <xsl:param name="nonempty-required" as="xs:boolean"/>
+            <!-- If the URI has a preferred prefix, then use it; otherwise, use the given prefix -->
+            <xsl:choose>
+              <xsl:when test="$ns-node = $ns-prefs/@uri">
+                <!-- Use the preferred prefix, unless it's empty (default) and required to be non-empty. -->
+                <xsl:variable name="preferred-prefix" select="$ns-prefs[@uri eq $ns-node][1]/@prefix/string(.)"/>
+                <xsl:sequence select="if ($nonempty-required and not($preferred-prefix))
+                                      then $given-prefix
+                                      else $preferred-prefix"/>
+              </xsl:when>
+              <xsl:otherwise>
+                <xsl:sequence select="$given-prefix"/>
+              </xsl:otherwise>
+            </xsl:choose>
+          </xsl:function>
+
 
   <!-- Create the final list of bindings, preventing the duplication of prefixes. -->
-  <xsl:function name="nn:final-bindings" as="element(binding)*">
-    <xsl:param name="doc" as="document-node()"/>
-    <xsl:apply-templates mode="remove-duplicates" select="nn:candidate-bindings-doc($doc)/binding"/>
+  <xsl:function name="nn:final-bindings-doc" as="document-node()">
+    <xsl:param name="doc"      as="document-node()"/>
+    <xsl:param name="ns-prefs" as="element(ns)*"/>
+    <xsl:document>
+      <xsl:apply-templates mode="remove-duplicates" select="nn:candidate-bindings-doc($doc,$ns-prefs)/binding"/>
+    </xsl:document>
   </xsl:function>
 
           <!-- Generate a prefix if it's already being used -->
@@ -115,8 +187,11 @@
 
   <!-- Generate a namespace node for each of the final bindings -->
   <xsl:function name="nn:new-namespace-nodes">
-    <xsl:param name="doc" as="document-node()"/>
-    <xsl:for-each select="nn:final-bindings($doc)">
+    <xsl:param name="doc"      as="document-node()"/>
+    <xsl:param name="ns-prefs" as="element(ns)*"/>
+    <xsl:for-each select="nn:final-bindings-doc($doc,$ns-prefs)/binding
+                          [not(generate-prefix and uri = preceding-sibling::binding[generate-prefix]/uri)]">
+                          <!-- If we end up with more than one <generate-prefix/> for the same URI, only process the first -->
       <xsl:variable name="prefix">
         <xsl:choose>
           <xsl:when test="generate-prefix">
@@ -165,20 +240,26 @@
   <xsl:function name="nn:new-qname">
     <xsl:param name="node"/>
     <xsl:param name="ns-nodes"/>
-    <xsl:variable name="prefix" select="$ns-nodes[. eq namespace-uri($node)]/name(.)"/>
+    <xsl:variable name="prefix" select="$ns-nodes[. eq namespace-uri($node)]
+                                                 [if ($node instance of element())
+                                                  then 1       (: preferred prefix for elements comes first :)
+                                                  else last()  (: but attributes *must* use a prefix (comes last) :)
+                                                 ]
+                                                 /name(.)"/>
     <xsl:variable name="maybe-colon" select="if ($prefix) then ':' else ''"/>
     <xsl:sequence select="concat($prefix, $maybe-colon, local-name($node))"/>
   </xsl:function>
 
   <!-- Print out some diagnostics to show what's going on beneath the covers. -->
   <xsl:function name="nn:diagnostics">
-    <xsl:param name="doc" as="document-node()"/>
+    <xsl:param name="doc"      as="document-node()"/>
+    <xsl:param name="ns-prefs" as="element(ns)*"/>
     <diagnostics>
       <diagnostic name="candidate-bindings-doc">
-        <xsl:copy-of select="nn:candidate-bindings-doc($doc)"/>
+        <xsl:copy-of select="nn:candidate-bindings-doc($doc,$ns-prefs)"/>
       </diagnostic>
-      <diagnostic name="final-bindings">
-        <xsl:copy-of select="nn:final-bindings($doc)"/>
+      <diagnostic name="final-bindings-doc">
+        <xsl:copy-of select="nn:final-bindings-doc($doc,$ns-prefs)"/>
       </diagnostic>
     </diagnostics>
   </xsl:function>
