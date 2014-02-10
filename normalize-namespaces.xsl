@@ -35,25 +35,26 @@
   <xsl:function name="nn:normalize" as="document-node()">
     <xsl:param name="doc"      as="document-node()"/>
     <xsl:param name="ns-prefs" as="element(ns)*"/>
-    <xsl:param name="disallow-other-uses-of-preferred-prefixes" as="xs:boolean"/>
+ 
     <!-- Set to true if you want to disallow the use of preferred prefixes
          except as specifically allowed, e.g. if "foo" appears in the
-         document bound to a different namespace than the one you specified. -->
+         document bound to a different namespace than the one you specified.
+    -->
+    <xsl:param name="disallow-other-uses-of-preferred-prefixes" as="xs:boolean"/>
 
-    <!-- print a DEBUG message, if applicable -->
-    <xsl:if test="$DEBUG">
-      <xsl:message>
-        <xsl:copy-of select="nn:diagnostics($doc,$ns-prefs,$disallow-other-uses-of-preferred-prefixes)"/>
-      </xsl:message>
-    </xsl:if>
-    <!-- Apply the new namespace nodes -->
+    <!-- Get the new, normalized namespace nodes for this document -->
+    <xsl:variable name="ns-nodes" as="item()*">
+      <xsl:apply-templates mode="new-namespace-nodes" select="$doc">
+        <xsl:with-param name="ns-prefs" select="$ns-prefs" tunnel="yes"/>
+        <xsl:with-param name="disallow-other-uses"
+                        select="$disallow-other-uses-of-preferred-prefixes"
+                        tunnel="yes"/>
+      </xsl:apply-templates>
+    </xsl:variable>
+    <!-- Return a new document with the normalized namespace nodes applied -->
     <xsl:document>
       <xsl:apply-templates mode="normalize-namespaces" select="$doc">
-        <xsl:with-param name="ns-nodes"
-                        select="nn:new-namespace-nodes($doc,
-                                                       $ns-prefs,
-                                                       $disallow-other-uses-of-preferred-prefixes)"
-                        tunnel="yes"/>
+        <xsl:with-param name="ns-nodes" select="$ns-nodes" tunnel="yes"/>
       </xsl:apply-templates>
     </xsl:document>
   </xsl:function>
@@ -70,11 +71,10 @@
   <!-- These candidate bindings disallow default declarations
        for namespaces that need a prefix, but they don't yet
        prevent duplicate prefixes; that comes later. -->
-  <xsl:function name="nn:candidate-bindings-doc" as="document-node()">
-    <xsl:param name="doc"      as="document-node()"/>
-    <xsl:param name="ns-prefs" as="element(ns)*"/>
+  <xsl:template mode="candidate-bindings-doc" match="/">
+    <xsl:param name="ns-prefs" as="element(ns)*" tunnel="yes"/>
     <xsl:document>
-      <xsl:for-each select="nn:unique-uri-namespace-nodes($doc)">
+      <xsl:for-each select="nn:unique-uri-namespace-nodes(.)">
         <!-- Process the pre-existing URIs (from the user-supplied list) first;
              that way, their prefixes will have precedence when removing conflicts. -->
         <xsl:sort select="if (. = $ns-prefs/@uri) then 'first' else 'last'"/>
@@ -120,7 +120,7 @@
         </xsl:choose>
       </xsl:for-each>
     </xsl:document>
-  </xsl:function>
+  </xsl:template>
 
           <xsl:function name="nn:binding-with-nonempty-prefix" as="element(binding)">
             <xsl:param name="ns-node"/>
@@ -171,13 +171,14 @@
 
 
   <!-- Remove conflicts (same prefix occurring more than once) -->
-  <xsl:function name="nn:unconflicted-bindings-doc" as="document-node()">
-    <xsl:param name="doc"      as="document-node()"/>
-    <xsl:param name="ns-prefs" as="element(ns)*"/>
+  <xsl:template mode="unconflicted-bindings-doc" match="/">
+    <xsl:variable name="candidate-bindings-doc">
+      <xsl:apply-templates mode="candidate-bindings-doc" select="."/>
+    </xsl:variable>
     <xsl:document>
-      <xsl:apply-templates mode="remove-conflicts" select="nn:candidate-bindings-doc($doc,$ns-prefs)/binding"/>
+      <xsl:apply-templates mode="remove-conflicts" select="$candidate-bindings-doc/binding"/>
     </xsl:document>
-  </xsl:function>
+  </xsl:template>
 
           <!-- Generate a prefix if it's already being used -->
           <xsl:template mode="remove-conflicts" match="prefix[. = preceding::prefix]">
@@ -196,29 +197,28 @@
        declarations (those which could only come about because an extra declaration
        was added to handle qualified attributes but has since become unnecessary).
   -->
-  <xsl:function name="nn:final-bindings-doc" as="document-node()">
-    <xsl:param name="doc"      as="document-node()"/>
-    <xsl:param name="ns-prefs" as="element(ns)*"/>
-    <xsl:param name="disallow-other-uses" as="xs:boolean"/>
+  <xsl:template mode="final-bindings-doc" match="/">
+    <xsl:param name="disallow-other-uses" as="xs:boolean" tunnel="yes"/>
     <xsl:document>
+      <xsl:variable name="unconflicted-bindings-doc">
+        <xsl:apply-templates mode="unconflicted-bindings-doc" select="."/>
+      </xsl:variable>
       <xsl:variable name="redundancies-removed">
         <xsl:apply-templates mode="remove-redundancies"
-                             select="nn:unconflicted-bindings-doc($doc,$ns-prefs)/binding"/>
+                             select="$unconflicted-bindings-doc/binding"/>
       </xsl:variable>
       <xsl:choose>
         <!-- When the user demands that their preferred prefixes not be used
              for anything but the specified URIs, we make one additional pass. -->
         <xsl:when test="$disallow-other-uses">
-          <xsl:apply-templates mode="remove-disallowed" select="$redundancies-removed">
-            <xsl:with-param name="ns-prefs" select="$ns-prefs" tunnel="yes"/>
-          </xsl:apply-templates>
+          <xsl:apply-templates mode="remove-disallowed" select="$redundancies-removed"/>
         </xsl:when>
         <xsl:otherwise>
           <xsl:copy-of select="$redundancies-removed"/>
         </xsl:otherwise>
       </xsl:choose>
     </xsl:document>
-  </xsl:function>
+  </xsl:template>
 
           <!-- Remove a generated-prefix in favor of an already-present, non-empty prefix -->
           <xsl:template mode="remove-redundancies"
@@ -254,11 +254,17 @@
 
 
   <!-- Generate a namespace node for each of the final bindings -->
-  <xsl:function name="nn:new-namespace-nodes">
-    <xsl:param name="doc"      as="document-node()"/>
-    <xsl:param name="ns-prefs" as="element(ns)*"/>
-    <xsl:param name="disallow-other-uses" as="xs:boolean"/>
-    <xsl:for-each select="nn:final-bindings-doc($doc,$ns-prefs,$disallow-other-uses)/binding">
+  <xsl:template mode="new-namespace-nodes" match="/">
+    <!-- print a DEBUG message, if applicable -->
+    <xsl:if test="$DEBUG">
+      <xsl:message>
+        <xsl:apply-templates mode="diagnostics" select="."/>
+      </xsl:message>
+    </xsl:if>
+    <xsl:variable name="final-bindings-doc">
+      <xsl:apply-templates mode="final-bindings-doc" select="."/>
+    </xsl:variable>
+    <xsl:for-each select="$final-bindings-doc/binding">
       <xsl:variable name="prefix">
         <xsl:choose>
           <xsl:when test="generate-prefix">
@@ -279,7 +285,7 @@
       </xsl:variable>
       <xsl:namespace name="{$prefix}" select="string(uri)"/>
     </xsl:for-each>
-  </xsl:function>
+  </xsl:template>
 
 
   <!-- Give every element the same namespace nodes (the ones we've decided on above) -->
@@ -318,21 +324,18 @@
   </xsl:function>
 
   <!-- Print out some diagnostics to show what's going on beneath the covers. -->
-  <xsl:function name="nn:diagnostics">
-    <xsl:param name="doc"      as="document-node()"/>
-    <xsl:param name="ns-prefs" as="element(ns)*"/>
-    <xsl:param name="disallow-other-uses" as="xs:boolean"/>
+  <xsl:template mode="diagnostics" match="/">
     <diagnostics>
       <diagnostic name="candidate-bindings-doc">
-        <xsl:copy-of select="nn:candidate-bindings-doc($doc,$ns-prefs)"/>
+        <xsl:apply-templates mode="candidate-bindings-doc" select="."/>
       </diagnostic>
       <diagnostic name="unconflicted-bindings-doc">
-        <xsl:copy-of select="nn:unconflicted-bindings-doc($doc,$ns-prefs)"/>
+        <xsl:apply-templates mode="unconflicted-bindings-doc" select="."/>
       </diagnostic>
       <diagnostic name="final-bindings-doc">
-        <xsl:copy-of select="nn:final-bindings-doc($doc,$ns-prefs,$disallow-other-uses)"/>
+        <xsl:apply-templates mode="final-bindings-doc" select="."/>
       </diagnostic>
     </diagnostics>
-  </xsl:function>
+  </xsl:template>
 
 </xsl:stylesheet>

@@ -1,9 +1,17 @@
-<?xml version="1.0" encoding="UTF-8"?><foo xmlns:x="default3" xmlns="default1" xmlns:ns1="default2andfoo" xmlns:xyz="unused-uri">
+<?xml version="1.0" encoding="UTF-8"?><results><foo xmlns:x="default3" xmlns="default1" xmlns:foo="default2andfoo" xmlns:xyz="unused-uri">
   <bar>
-    <ns1:bat ns1:bar="value">
+    <foo:bat foo:bar="value">
       <x:bang>
         <hi/>
       </x:bang>
-    </ns1:bat>
+    </foo:bat>
   </bar>
-</foo>
+</foo><ns1:foo xmlns:x="default3" xmlns:ns1="default1" xmlns:ns2="default2andfoo" xmlns:xyz="unused-uri">
+  <ns1:bar>
+    <ns2:bat ns2:bar="value">
+      <x:bang>
+        <ns1:hi/>
+      </x:bang>
+    </ns2:bat>
+  </ns1:bar>
+</ns1:foo></results>

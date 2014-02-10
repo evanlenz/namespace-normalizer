@@ -7,12 +7,18 @@
   <xsl:import href="../normalize-namespaces.xsl"/>
 
   <xsl:variable name="ns-prefs" as="element(ns)*">
+    <ns prefix=""    uri="reserved"/>
     <ns prefix="x"   uri="default3"/>
     <ns prefix="foo" uri="another"/>
   </xsl:variable>
 
   <xsl:template match="/">
-    <xsl:copy-of select="nn:normalize(., $ns-prefs, true())"/>
+    <results>
+      <!-- Allow use of reserved prefixes -->
+      <xsl:copy-of select="nn:normalize(., $ns-prefs, false())"/>
+      <!-- Disallow use of reserved prefixes -->
+      <xsl:copy-of select="nn:normalize(., $ns-prefs, true())"/>
+    </results>
   </xsl:template>
 
 </xsl:stylesheet>
