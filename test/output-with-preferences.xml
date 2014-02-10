@@ -6,12 +6,12 @@
       </x:bang>
     </foo:bat>
   </bar>
-</foo><ns1:foo xmlns:x="default3" xmlns:ns1="default1" xmlns:ns2="default2andfoo" xmlns:xyz="unused-uri">
+</foo><ns1:foo xmlns:x="default3" xmlns:ns1="default1" xmlns:d18e10="default2andfoo" xmlns:xyz="unused-uri">
   <ns1:bar>
-    <ns2:bat ns2:bar="value">
+    <d18e10:bat d18e10:bar="value">
       <x:bang>
         <ns1:hi/>
       </x:bang>
-    </ns2:bat>
+    </d18e10:bat>
   </ns1:bar>
 </ns1:foo></results>

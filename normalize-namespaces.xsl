@@ -255,6 +255,8 @@
 
   <!-- Generate a namespace node for each of the final bindings -->
   <xsl:template mode="new-namespace-nodes" match="/">
+    <xsl:param name="disallow-other-uses" tunnel="yes"/>
+    <xsl:param name="ns-prefs" tunnel="yes"/>
     <!-- print a DEBUG message, if applicable -->
     <xsl:if test="$DEBUG">
       <xsl:message>
@@ -271,7 +273,8 @@
             <!-- Generate in the form "ns1", "ns2", etc. -->
             <xsl:variable name="auto-prefix"
                           select="concat('ns',1+count(preceding::generate-prefix))"/>
-            <xsl:variable name="already-taken" select="$auto-prefix = ../binding/prefix"/>
+            <xsl:variable name="already-taken" select="$auto-prefix = ../binding/prefix
+                                                   or ($auto-prefix = $ns-prefs/@prefix and $disallow-other-uses)"/>
 
             <!-- But if the document already has "ns1", etc. then punt and call generate-id() -->
             <xsl:sequence select="if (not($already-taken))

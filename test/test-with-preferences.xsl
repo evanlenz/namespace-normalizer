@@ -9,6 +9,7 @@
   <xsl:variable name="ns-prefs" as="element(ns)*">
     <ns prefix=""    uri="reserved"/>
     <ns prefix="x"   uri="default3"/>
+    <ns prefix="ns2" uri="already_taken"/>
     <ns prefix="foo" uri="another"/>
   </xsl:variable>
 
