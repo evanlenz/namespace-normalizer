@@ -13,12 +13,19 @@
     <ns prefix="foo" uri="another"/>
   </xsl:variable>
 
+  <xsl:variable name="ns-prefs2" as="element(ns)*">
+    <ns prefix=""    uri="default1"/>
+  </xsl:variable>
+
   <xsl:template match="/">
     <results>
       <!-- Allow use of reserved prefixes -->
       <xsl:copy-of select="nn:normalize(., $ns-prefs, false())"/>
       <!-- Disallow use of reserved prefixes -->
       <xsl:copy-of select="nn:normalize(., $ns-prefs, true())"/>
+
+      <!-- Force given default namespace -->
+      <xsl:copy-of select="nn:normalize(document('input_with_unqualified.xml'), $ns-prefs2, true())"/>
     </results>
   </xsl:template>
 

@@ -39,6 +39,11 @@
     <!-- Set to true if you want to disallow the use of preferred prefixes
          except as specifically allowed, e.g. if "foo" appears in the
          document bound to a different namespace than the one you specified.
+
+         This treats "" as a prefix too, which means that if $ns-prefs
+         includes a default namespace, then this could cause the result to
+         have xmlns="" un-declarations or default declarations *not* on
+         the document element (if unqualified ancestors are present).
     -->
     <xsl:param name="disallow-other-uses-of-preferred-prefixes" as="xs:boolean"/>
 
@@ -73,6 +78,7 @@
        prevent duplicate prefixes; that comes later. -->
   <xsl:template mode="candidate-bindings-doc" match="/">
     <xsl:param name="ns-prefs" as="element(ns)*" tunnel="yes"/>
+    <xsl:param name="disallow-other-uses" tunnel="yes"/>
     <xsl:document>
       <xsl:for-each select="nn:unique-uri-namespace-nodes(.)">
         <!-- Process the pre-existing URIs (from the user-supplied list) first;
@@ -89,8 +95,18 @@
          because we want to guarantee that the only
          namespace declarations in our result will be
          attached to the root element.
+         
+         The exception is when we are forcing a different
+         default namespace. In that case, the guarantee
+         no longer applies.
         -->
-        <xsl:variable name="cannot-be-default" select="//*[not(namespace-uri())]"/>
+        <xsl:variable name="cannot-be-default" as="xs:boolean">
+          <xsl:variable name="unqualified-elements-are-present" select="//*[not(namespace-uri())]"/>
+          <xsl:variable name="force-the-preferred-default-namespace"
+                        select="$ns-prefs[@prefix eq ''] and $disallow-other-uses"/>
+          <xsl:sequence select="$unqualified-elements-are-present and
+                                not($force-the-preferred-default-namespace)"/>
+        </xsl:variable>
 
         <xsl:choose>
           <!-- do we need to force a non-empty prefix? -->
@@ -295,8 +311,11 @@
   <xsl:template match="*" mode="normalize-namespaces">
     <xsl:param name="ns-nodes" tunnel="yes"/>
     <xsl:element name="{nn:new-qname(.,$ns-nodes)}" namespace="{namespace-uri()}">
-      <!-- strictly speaking, we only need to copy these to the document element, but oh well -->
-      <xsl:copy-of select="$ns-nodes"/>
+      <!-- except, don't insert the default namespace (i.e. where name() is empty)
+           if this element is unqualified (i.e. where namespace-uri(current()) is empty).
+           This is only possible when $disallow-other-uses is set to true.
+      -->
+      <xsl:copy-of select="$ns-nodes[name() or namespace-uri(current())]"/>
       <xsl:apply-templates mode="#current" select="@* | node()"/>
     </xsl:element>
   </xsl:template>

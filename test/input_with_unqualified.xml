@@ -1,0 +1,6 @@
+<xyz:foo xmlns:xyz="default1">
+  <unqualified/>
+  <unqualified2>
+    <xyz:qualified/>
+  </unqualified2>
+</xyz:foo>

@@ -14,4 +14,9 @@
       </x:bang>
     </d18e10:bat>
   </ns1:bar>
-</ns1:foo></results>
+</ns1:foo><foo xmlns="default1">
+  <unqualified xmlns=""/>
+  <unqualified2 xmlns="">
+    <qualified xmlns="default1"/>
+  </unqualified2>
+</foo></results>
