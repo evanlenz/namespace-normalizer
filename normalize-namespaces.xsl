@@ -313,7 +313,7 @@
     <xsl:element name="{nn:new-qname(.,$ns-nodes)}" namespace="{namespace-uri()}">
       <!-- except, don't insert the default namespace (i.e. where name() is empty)
            if this element is unqualified (i.e. where namespace-uri(current()) is empty).
-           This is only possible when $disallow-other-uses is set to true.
+           This scenario only occurs when $disallow-other-uses is set to true.
       -->
       <xsl:copy-of select="$ns-nodes[name() or namespace-uri(current())]"/>
       <xsl:apply-templates mode="#current" select="@* | node()"/>
