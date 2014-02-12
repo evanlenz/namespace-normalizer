@@ -1,4 +1,4 @@
-<xyz:foo xmlns:xyz="default1">
+<xyz:foo xmlns:xyz="urn:default1">
   <unqualified/>
   <unqualified2>
     <xyz:qualified/>

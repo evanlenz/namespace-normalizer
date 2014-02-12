@@ -14,7 +14,7 @@
   </xsl:variable>
 
   <xsl:variable name="ns-prefs2" as="element(ns)*">
-    <ns prefix=""    uri="default1"/>
+    <ns prefix=""    uri="urn:default1"/>
   </xsl:variable>
 
   <xsl:template match="/">
