@@ -27,14 +27,16 @@
   <!-- You can optionally supply a set of preferred prefix/URI mappings;
        the expected format of $ns-prefs is as follows:
        
-       <ns prefix=""    uri="http://example.com"/>
-       <ns prefix="foo" uri="http://example.com/ns"/>
-       ...
-       
+         <ns prefix=""    uri="http://example.com"/>
+         <ns prefix="foo" uri="http://example.com/ns"/>
+         ...
+
+       The <ns> can actually be any element name.
+       Only the attribute names are important ("prefix" and "uri").
   -->
   <xsl:function name="nn:normalize" as="document-node()">
     <xsl:param name="doc"      as="document-node()"/>
-    <xsl:param name="ns-prefs" as="element(ns)*"/>
+    <xsl:param name="ns-prefs" as="element()*"/>
  
     <!-- Set to true if you want to disallow the use of preferred prefixes
          except as specifically allowed, e.g. if "foo" appears in the
@@ -77,7 +79,7 @@
        for namespaces that need a prefix, but they don't yet
        prevent duplicate prefixes; that comes later. -->
   <xsl:template mode="candidate-bindings-doc" match="/">
-    <xsl:param name="ns-prefs" as="element(ns)*" tunnel="yes"/>
+    <xsl:param name="ns-prefs" as="element()*" tunnel="yes"/>
     <xsl:param name="disallow-other-uses" tunnel="yes"/>
     <xsl:document>
       <xsl:for-each select="nn:unique-uri-namespace-nodes(.)">
@@ -167,7 +169,7 @@
           <!-- Use the user-supplied preferred prefixes whenever possible -->
           <xsl:function name="nn:choose-prefix" as="xs:string">
             <xsl:param name="ns-node"/>
-            <xsl:param name="ns-prefs"          as="element(ns)*"/>
+            <xsl:param name="ns-prefs"          as="element()*"/>
             <xsl:param name="given-prefix"      as="xs:string"/>
             <xsl:param name="nonempty-required" as="xs:boolean"/>
             <!-- If the URI has a preferred prefix, then use it; otherwise, use the given prefix -->
